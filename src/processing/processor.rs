@@ -314,7 +314,7 @@ impl MasternodeProcessor {
         let deleted_masternode_hashes = deleted_masternode_hashes;
         let mut added_masternodes = added_or_modified_masternodes.clone();
         let mut modified_masternode_keys: HashSet<UInt256> = HashSet::new();
-        if base_masternodes.len() > 0 {
+        if !base_masternodes.is_empty() {
             let base_masternodes = base_masternodes.clone();
             base_masternodes.iter().for_each(|(h, _e)| {
                 added_masternodes.remove(h);
@@ -326,14 +326,13 @@ impl MasternodeProcessor {
         }
         let mut modified_masternodes: BTreeMap<UInt256, masternode::MasternodeEntry> =
             modified_masternode_keys
-                .clone()
                 .into_iter()
                 .fold(BTreeMap::new(), |mut acc, hash| {
                     acc.insert(hash, added_or_modified_masternodes[&hash].clone());
                     acc
                 });
-        let mut masternodes = if base_masternodes.len() > 0 {
-            let mut old_mnodes = base_masternodes.clone();
+        let mut masternodes = if !base_masternodes.is_empty() {
+            let mut old_mnodes = base_masternodes;
             for hash in deleted_masternode_hashes {
                 old_mnodes.remove(&hash.clone().reversed());
             }
@@ -365,7 +364,7 @@ impl MasternodeProcessor {
                             (*old).known_confirmed_at_height = Some(block_height);
                         }
                     }
-                    masternodes.insert((*hash).clone(), (*modified).clone());
+                    masternodes.insert(*hash, (*modified).clone());
                 }
             });
         (added_masternodes, modified_masternodes, masternodes)
@@ -383,7 +382,7 @@ impl MasternodeProcessor {
         bool,
     ) {
         let has_valid_quorums = true;
-        let mut added = added_quorums.clone();
+        let mut added = added_quorums;
         added.iter_mut().for_each(|(&llmq_type, llmqs_of_type)| {
             if self.should_process_quorum(llmq_type) {
                 (*llmqs_of_type)
@@ -487,7 +486,6 @@ impl MasternodeProcessor {
         block_height: u32,
     ) -> BTreeMap<UInt256, masternode::MasternodeEntry> {
         masternodes
-            .clone()
             .into_iter()
             .filter_map(|(_, entry)| {
                 if entry.confirmed_hash.is_zero() || !entry.is_valid {
