@@ -4,6 +4,7 @@ pub mod tests {
     extern crate reqwest;
     use crate::processing::processor_cache::MasternodeProcessorCache;
     use crate::processing::{MNListDiffResult, QRInfoResult};
+    use crate::tests::block_store::init_testnet_store;
     use crate::{
         process_mnlistdiff_from_message, processor_create_cache, register_processor,
         unwrap_or_diff_processing_failure, unwrap_or_qr_processing_failure, unwrap_or_return,
@@ -27,7 +28,6 @@ pub mod tests {
     use std::io::Read;
     use std::ptr::null_mut;
     use std::{env, fs, slice};
-    use crate::tests::block_store::init_testnet_store;
 
     // This regex can be used to omit timestamp etc. while replacing after paste from xcode console log
     // So it's bascically cut off such an expression "2022-09-11 15:31:59.445343+0300 DashSync_Example[41749:2762015]"
@@ -99,11 +99,17 @@ pub mod tests {
         pub digest: UInt256,
     }
     pub fn get_block_from_insight_by_hash(hash: UInt256) -> Option<MerkleBlock> {
-        let path = format!("https://testnet-insight.dashevo.org/insight-api-dash/block/{}", hash.clone().reversed().0.to_hex().as_str());
+        let path = format!(
+            "https://testnet-insight.dashevo.org/insight-api-dash/block/{}",
+            hash.clone().reversed().0.to_hex().as_str()
+        );
         request_block(path)
     }
     pub fn get_block_from_insight_by_height(height: u32) -> Option<MerkleBlock> {
-        let path = format!("https://testnet-insight.dashevo.org/insight-api-dash/block/{}", height);
+        let path = format!(
+            "https://testnet-insight.dashevo.org/insight-api-dash/block/{}",
+            height
+        );
         request_block(path)
     }
 
@@ -116,20 +122,20 @@ pub mod tests {
                     let merkle_block = MerkleBlock {
                         hash: UInt256::from_hex(block.hash.as_str()).unwrap().reversed(),
                         height: block.height as u32,
-                        merkleroot: UInt256::from_hex(block.merkleroot.as_str()).unwrap()
+                        merkleroot: UInt256::from_hex(block.merkleroot.as_str()).unwrap(),
                     };
                     println!("request_block: {}", path.as_str());
                     Some(merkle_block)
-                },
+                }
                 Err(err) => {
                     println!("{}", err);
                     None
-                },
+                }
             },
             Err(err) => {
                 println!("{}", err);
                 None
-            },
+            }
         }
     }
 
@@ -300,8 +306,15 @@ pub mod tests {
 
     pub fn assert_diff_result(context: &mut FFIContext, result: types::MNListDiffResult) {
         let masternode_list = unsafe { (*result.masternode_list).decode() };
-        print!("block_hash: {} ({})", masternode_list.block_hash, masternode_list.block_hash.clone().reversed());
-        let bh = context.block_for_hash(masternode_list.block_hash).unwrap().height;
+        print!(
+            "block_hash: {} ({})",
+            masternode_list.block_hash,
+            masternode_list.block_hash.clone().reversed()
+        );
+        let bh = context
+            .block_for_hash(masternode_list.block_hash)
+            .unwrap()
+            .height;
         assert!(
             result.has_found_coinbase,
             "Did not find coinbase at height {}",
@@ -333,7 +346,11 @@ pub mod tests {
         let data: &mut FFIContext = &mut *(context as *mut FFIContext);
         let block_hash = UInt256(*block_hash);
         let block_hash_reversed = block_hash.clone().reversed();
-        let block = data.block_for_hash(block_hash).unwrap_or(&MerkleBlock { hash: UInt256::MIN, height: u32::MAX, merkleroot: UInt256::MIN });
+        let block = data.block_for_hash(block_hash).unwrap_or(&MerkleBlock {
+            hash: UInt256::MIN,
+            height: u32::MAX,
+            merkleroot: UInt256::MIN,
+        });
         let height = block.height;
         // println!("get_block_height_by_hash_from_context {}: {} ({})", height, block_hash_reversed, block_hash);
         height
@@ -353,7 +370,11 @@ pub mod tests {
         let data: &mut FFIContext = &mut *(context as *mut FFIContext);
         if let Some(block) = data.block_for_height(block_height) {
             let block_hash = block.hash;
-            println!("get_block_hash_by_height_from_context: {}: {:?}", block_height, block_hash.clone().reversed());
+            println!(
+                "get_block_hash_by_height_from_context: {}: {:?}",
+                block_height,
+                block_hash.clone().reversed()
+            );
             block_hash.clone().0.as_mut_ptr()
             // block.hash.clone().reversed().0.as_mut_ptr()
         } else {
@@ -382,7 +403,10 @@ pub mod tests {
         let h = UInt256(*(block_hash));
         let data: &mut FFIContext = &mut *(context as *mut FFIContext);
         if let Some(snapshot) = data.cache.llmq_snapshots.get(&h) {
-            println!("get_llmq_snapshot_by_block_hash_from_context: {}: {:?}", h, snapshot);
+            println!(
+                "get_llmq_snapshot_by_block_hash_from_context: {}: {:?}",
+                h, snapshot
+            );
             boxed(snapshot.encode())
         } else {
             null_mut()
@@ -490,9 +514,13 @@ pub mod tests {
         let mut merkle_root = if let Some(block) = data.block_for_hash(block_hash) {
             block.merkleroot
         } else {
-            UInt256::from_hex("0000000000000000000000000000000000000000000000000000000000000000").unwrap()
+            UInt256::from_hex("0000000000000000000000000000000000000000000000000000000000000000")
+                .unwrap()
         };
-        println!("get_merkle_root_by_hash_default {} ({}) => ({})", block_hash, block_hash_reversed, merkle_root);
+        println!(
+            "get_merkle_root_by_hash_default {} ({}) => ({})",
+            block_hash, block_hash_reversed, merkle_root
+        );
         merkle_root.0.as_mut_ptr()
     }
 
@@ -548,21 +576,31 @@ pub mod tests {
         true
     }
 
-    pub unsafe extern "C" fn get_block_hash_by_height_from_insight(block_height: u32, context: *const std::ffi::c_void) -> *mut u8 {
+    pub unsafe extern "C" fn get_block_hash_by_height_from_insight(
+        block_height: u32,
+        context: *const std::ffi::c_void,
+    ) -> *mut u8 {
         let data: &mut FFIContext = &mut *(context as *mut FFIContext);
-        match data.blocks.iter().find(|block| block.height == block_height) {
+        match data
+            .blocks
+            .iter()
+            .find(|block| block.height == block_height)
+        {
             Some(block) => block.hash.clone().0.as_mut_ptr(),
             None => match get_block_from_insight_by_height(block_height) {
                 Some(block) => {
                     data.blocks.push(block.clone());
                     block.hash.clone().0.as_mut_ptr()
-                },
-                None => null_mut()
-            }
+                }
+                None => null_mut(),
+            },
         }
     }
 
-    pub unsafe extern "C" fn get_block_height_by_hash_from_insight(block_hash: *mut [u8; 32], context: *const std::ffi::c_void) -> u32 {
+    pub unsafe extern "C" fn get_block_height_by_hash_from_insight(
+        block_hash: *mut [u8; 32],
+        context: *const std::ffi::c_void,
+    ) -> u32 {
         let data: &mut FFIContext = &mut *(context as *mut FFIContext);
         let hash = UInt256(*block_hash);
         match data.blocks.iter().find(|block| block.hash == hash) {
@@ -572,12 +610,15 @@ pub mod tests {
                     data.blocks.push(block.clone());
                     block.height
                 }
-                None => u32::MAX
-            }
+                None => u32::MAX,
+            },
         }
     }
 
-    pub unsafe extern "C" fn get_merkle_root_by_hash_from_insight(block_hash: *mut [u8; 32], context: *const std::ffi::c_void) -> *mut u8 {
+    pub unsafe extern "C" fn get_merkle_root_by_hash_from_insight(
+        block_hash: *mut [u8; 32],
+        context: *const std::ffi::c_void,
+    ) -> *mut u8 {
         let data: &mut FFIContext = &mut *(context as *mut FFIContext);
         let hash = UInt256(*block_hash);
         match data.blocks.iter().find(|block| block.hash == hash) {
@@ -586,9 +627,9 @@ pub mod tests {
                 Some(block) => {
                     data.blocks.push(block);
                     block.merkleroot.clone().0.as_mut_ptr()
-                },
-                None => UInt256::MIN.clone().0.as_mut_ptr()
-            }
+                }
+                None => UInt256::MIN.clone().0.as_mut_ptr(),
+            },
         }
     }
 
@@ -624,7 +665,7 @@ pub mod tests {
         let context = &mut FFIContext {
             chain,
             cache: &mut MasternodeProcessorCache::default(),
-            blocks: init_testnet_store()
+            blocks: init_testnet_store(),
         } as *mut _ as *mut std::ffi::c_void;
 
         let cache = unsafe { processor_create_cache() };

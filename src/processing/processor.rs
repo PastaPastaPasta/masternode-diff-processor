@@ -116,7 +116,13 @@ impl MasternodeProcessor {
                 self.lookup_block_height_by_hash(block_hash),
                 block_hash
             ));
-            Some(masternode::MasternodeList::new(BTreeMap::default(), BTreeMap::default(), block_hash, self.lookup_block_height_by_hash(block_hash), false))
+            Some(masternode::MasternodeList::new(
+                BTreeMap::default(),
+                BTreeMap::default(),
+                block_hash,
+                self.lookup_block_height_by_hash(block_hash),
+                false,
+            ))
             // None
         } else if let Some(cached) = cached_lists.get(&block_hash) {
             // Getting it from local cache stored as opaque in FFI context
@@ -154,14 +160,26 @@ impl MasternodeProcessor {
     ) -> Option<llmq::LLMQSnapshot> {
         if let Some(cached) = cached_snapshots.get(&block_hash) {
             // Getting it from local cache stored as opaque in FFI context
-            self.log(format!("find_snapshot: (Cached) {}: {}", self.lookup_block_height_by_hash(block_hash), block_hash));
+            self.log(format!(
+                "find_snapshot: (Cached) {}: {}",
+                self.lookup_block_height_by_hash(block_hash),
+                block_hash
+            ));
             Some(cached.clone())
         } else if let Some(looked) = self.lookup_snapshot_by_block_hash(block_hash) {
             // Getting it from FFI directly
-            self.log(format!("find_snapshot: (Looked) {}: {}", self.lookup_block_height_by_hash(block_hash), block_hash));
+            self.log(format!(
+                "find_snapshot: (Looked) {}: {}",
+                self.lookup_block_height_by_hash(block_hash),
+                block_hash
+            ));
             Some(looked)
         } else {
-            self.log(format!("find_snapshot: (None) {}: {}", self.lookup_block_height_by_hash(block_hash), block_hash));
+            self.log(format!(
+                "find_snapshot: (None) {}: {}",
+                self.lookup_block_height_by_hash(block_hash),
+                block_hash
+            ));
             None
         }
     }
@@ -432,7 +450,7 @@ impl MasternodeProcessor {
                 &mut cache.llmq_indexed_members,
                 &cache.mn_lists,
                 &cache.llmq_snapshots,
-                &mut cache.needed_masternode_lists
+                &mut cache.needed_masternode_lists,
             )
         } else {
             Self::valid_masternodes_for(masternodes, quorum_modifier, quorum_count, block_height)
@@ -475,7 +493,11 @@ impl MasternodeProcessor {
                 if entry.confirmed_hash.is_zero() || !entry.is_valid {
                     return None;
                 }
-                let score = masternode::MasternodeList::masternode_score(entry.clone(), quorum_modifier, block_height);
+                let score = masternode::MasternodeList::masternode_score(
+                    entry.clone(),
+                    quorum_modifier,
+                    block_height,
+                );
                 if score.is_some() && !score.unwrap().0.is_empty() {
                     Some((score.unwrap(), entry))
                 } else {
@@ -542,7 +564,9 @@ impl MasternodeProcessor {
         )
     }
 
-    fn sort_scored_masternodes(scored_masternodes: BTreeMap<UInt256, masternode::MasternodeEntry>) -> Vec<masternode::MasternodeEntry> {
+    fn sort_scored_masternodes(
+        scored_masternodes: BTreeMap<UInt256, masternode::MasternodeEntry>,
+    ) -> Vec<masternode::MasternodeEntry> {
         let mut v = Vec::from_iter(scored_masternodes);
         v.sort_by(|(s1, _), (s2, _b)| s2.clone().reversed().cmp(&s1.clone().reversed()));
         v.into_iter().map(|(s, node)| node).collect()
@@ -554,7 +578,8 @@ impl MasternodeProcessor {
         quorum_count: u32,
         block_height: u32,
     ) -> Vec<masternode::MasternodeEntry> {
-        let scored_masternodes = Self::score_masternodes(masternodes, quorum_modifier, block_height);
+        let scored_masternodes =
+            Self::score_masternodes(masternodes, quorum_modifier, block_height);
         Self::sort_scored_masternodes(scored_masternodes)
     }
 
@@ -564,7 +589,8 @@ impl MasternodeProcessor {
         quorum_count: u32,
         block_height: u32,
     ) -> Vec<masternode::MasternodeEntry> {
-        let scored_masternodes = Self::score_masternodes_map(masternodes, quorum_modifier, block_height);
+        let scored_masternodes =
+            Self::score_masternodes_map(masternodes, quorum_modifier, block_height);
         Self::sort_scored_masternodes(scored_masternodes)
     }
 
@@ -607,16 +633,20 @@ impl MasternodeProcessor {
                         // TODO: partition with enumeration doesn't work here, so need to change
                         // nodes.into_iter().enumerate().partition(|&(i, _)| snapshot.member_list.bit_is_true_at_le_index(i as u32))
                         let quorum_modifier = Self::build_llmq_modifier(llmq_type, work_block_hash);
-                        let scored_masternodes = Self::score_masternodes_map(masternode_list.masternodes, quorum_modifier, work_block_height);
-                        let scored_sorted_masternodes = Self::sort_scored_masternodes(scored_masternodes);
-                        let (used_at_h, unused_at_h) = scored_sorted_masternodes
-                        .into_iter()
-                        .partition(|_| {
-                            let is_true =
-                                snapshot.member_list.as_slice().bit_is_true_at_le_index(i);
-                            i += 1;
-                            is_true
-                        });
+                        let scored_masternodes = Self::score_masternodes_map(
+                            masternode_list.masternodes,
+                            quorum_modifier,
+                            work_block_height,
+                        );
+                        let scored_sorted_masternodes =
+                            Self::sort_scored_masternodes(scored_masternodes);
+                        let (used_at_h, unused_at_h) =
+                            scored_sorted_masternodes.into_iter().partition(|_| {
+                                let is_true =
+                                    snapshot.member_list.as_slice().bit_is_true_at_le_index(i);
+                                i += 1;
+                                is_true
+                            });
                         let sorted_used_at_h = Self::valid_masternodes_for_rotated_quorum_map(
                             used_at_h,
                             quorum_modifier,
@@ -649,7 +679,8 @@ impl MasternodeProcessor {
                 } else {
                     self.log(format!(
                         "missing masternode_list for block at height: {}: {}",
-                        work_block_height, work_block_hash.clone().reversed()
+                        work_block_height,
+                        work_block_hash.clone().reversed()
                     ));
                     vec![]
                 }
@@ -707,10 +738,10 @@ impl MasternodeProcessor {
                             if mn.is_valid
                                 && masternodes_used_at_h
                                     .iter()
-                                    .filter(|node|
+                                    .filter(|node| {
                                         mn.provider_registration_transaction_hash
                                             == node.provider_registration_transaction_hash
-                                    )
+                                    })
                                     .count()
                                     == 0
                             {
@@ -750,7 +781,10 @@ impl MasternodeProcessor {
                                     .get(i)
                                     .unwrap()
                                     .into_iter()
-                                    .filter(|&node| mn.provider_registration_transaction_hash == node.provider_registration_transaction_hash)
+                                    .filter(|&node| {
+                                        mn.provider_registration_transaction_hash
+                                            == node.provider_registration_transaction_hash
+                                    })
                                     .count()
                                     == 0
                                 {
@@ -859,8 +893,14 @@ impl MasternodeProcessor {
         llmq_type: LLMQType,
         block_hash: UInt256,
         block_height: u32,
-        cached_llmq_members: &mut BTreeMap<LLMQType, BTreeMap<UInt256, Vec<masternode::MasternodeEntry>>>,
-        cached_llmq_indexed_members: &mut BTreeMap<LLMQType, BTreeMap<llmq::LLMQIndexedHash, Vec<masternode::MasternodeEntry>>>,
+        cached_llmq_members: &mut BTreeMap<
+            LLMQType,
+            BTreeMap<UInt256, Vec<masternode::MasternodeEntry>>,
+        >,
+        cached_llmq_indexed_members: &mut BTreeMap<
+            LLMQType,
+            BTreeMap<llmq::LLMQIndexedHash, Vec<masternode::MasternodeEntry>>,
+        >,
         cached_mn_lists: &BTreeMap<UInt256, masternode::MasternodeList>,
         cached_llmq_snapshots: &BTreeMap<UInt256, llmq::LLMQSnapshot>,
         cached_needed_masternode_lists: &mut Vec<UInt256>,
@@ -891,8 +931,7 @@ impl MasternodeProcessor {
                         return members.clone();
                     }
                 } else {
-                    cached_llmq_indexed_members
-                        .insert(llmq_type, BTreeMap::new());
+                    cached_llmq_indexed_members.insert(llmq_type, BTreeMap::new());
                 }
                 let rotated_members = self.rotate_members(
                     cycle_base_height,

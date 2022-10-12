@@ -1,8 +1,18 @@
+use crate::lib_tests::tests::{
+    add_insight_lookup_default, get_block_hash_by_height_default,
+    get_llmq_snapshot_by_block_hash_default, get_masternode_list_by_block_hash_default,
+    get_masternode_list_by_block_hash_from_cache, get_merkle_root_by_hash_default,
+    hash_destroy_default, log_default, masternode_list_destroy_default,
+    masternode_list_save_default, masternode_list_save_in_cache, message_from_file,
+    process_mnlistdiff_from_message_internal, process_qrinfo_from_message_internal,
+    save_llmq_snapshot_default, save_llmq_snapshot_in_cache,
+    should_process_diff_with_range_default, should_process_llmq_of_type, snapshot_destroy_default,
+    validate_llmq_callback, FFIContext,
+};
+use crate::{process_qrinfo_from_message, processor_create_cache, register_processor};
 use bls_signatures::{G1Element, G2Element, Scheme};
 use dash_spv_ffi::ffi::unboxer::unbox_any;
 use dash_spv_ffi::types;
-use crate::lib_tests::tests::{add_insight_lookup_default, get_block_hash_by_height_default, get_llmq_snapshot_by_block_hash_default, get_masternode_list_by_block_hash_default, get_masternode_list_by_block_hash_from_cache, get_merkle_root_by_hash_default, hash_destroy_default, log_default, masternode_list_destroy_default, masternode_list_save_default, masternode_list_save_in_cache, message_from_file, process_mnlistdiff_from_message_internal, process_qrinfo_from_message_internal, save_llmq_snapshot_default, save_llmq_snapshot_in_cache, should_process_diff_with_range_default, should_process_llmq_of_type, snapshot_destroy_default, validate_llmq_callback, FFIContext};
-use crate::{process_qrinfo_from_message, processor_create_cache, register_processor};
 use dash_spv_models::common::chain_type::{ChainType, DevnetType, IHaveChainSettings};
 use dash_spv_models::common::LLMQType;
 use dash_spv_primitives::crypto::byte_util::{AsBytes, Reversable, UInt256};
@@ -21,7 +31,7 @@ fn test_llmq_rotation() {
     let context = &mut (FFIContext {
         chain,
         cache,
-        blocks: vec![]
+        blocks: vec![],
     }) as *mut _ as *mut std::ffi::c_void;
     let processor = unsafe {
         register_processor(
@@ -81,7 +91,7 @@ fn test_llmq_rotation_2() {
     let context = &mut (FFIContext {
         chain,
         cache,
-        blocks: vec![]
+        blocks: vec![],
     }) as *mut _ as *mut std::ffi::c_void;
     println!("test_llmq_rotation_2 {:?}", bytes.to_hex());
     let processor = unsafe {
@@ -463,7 +473,7 @@ fn test_devnet_333() {
     let context = &mut (FFIContext {
         chain,
         cache,
-        blocks: vec![]
+        blocks: vec![],
     }) as *mut _ as *mut std::ffi::c_void;
     // let cache = unsafe { processor_create_cache() };
     let processor = unsafe {
@@ -524,7 +534,7 @@ fn test_processor_devnet_333() {
     let context = &mut (FFIContext {
         chain,
         cache,
-        blocks: vec![]
+        blocks: vec![],
     }) as *mut _ as *mut std::ffi::c_void;
 
     let result = process_qrinfo_from_message(
@@ -745,7 +755,7 @@ fn test_processor_devnet_333_2() {
     let context = &mut (FFIContext {
         chain,
         cache,
-        blocks: vec![]
+        blocks: vec![],
     }) as *mut _ as *mut std::ffi::c_void;
 
     let mnldiff_bytes = message_from_file("mnlistdiff--1-25480.dat".to_string());
@@ -1455,7 +1465,7 @@ fn test_jack_daniels() {
     let context = &mut (FFIContext {
         chain,
         cache,
-        blocks: vec![]
+        blocks: vec![],
     }) as *mut _ as *mut std::ffi::c_void;
 
     let qrinfo_bytes = message_from_file("QRINFO_1_107966.dat".to_string());
@@ -1486,7 +1496,6 @@ pub unsafe extern "C" fn validate_llmq_callback_throuh_rust_bls(
         public_key,
     } = *result;
 
-
     println!(
         "validate_quorum_callback: {:?}, {}, {:?}, {:?}, {:?}, {:?}",
         items,
@@ -1502,17 +1511,25 @@ pub unsafe extern "C" fn validate_llmq_callback_throuh_rust_bls(
     let commitment_hash = UInt256(*commitment_hash);
     let keys = (0..count)
         .into_iter()
-        .map(|i| G1Element::from_bytes_legacy(UInt384(*(*(items.offset(i as isize)))).as_bytes()).unwrap())
+        .map(|i| {
+            G1Element::from_bytes_legacy(UInt384(*(*(items.offset(i as isize)))).as_bytes())
+                .unwrap()
+        })
         .collect::<Vec<G1Element>>();
 
-    let all_commitment_aggregated_signature_validated = verify_secure_aggregated(commitment_hash, all_commitment_aggregated_signature, keys);
+    let all_commitment_aggregated_signature_validated =
+        verify_secure_aggregated(commitment_hash, all_commitment_aggregated_signature, keys);
     if !all_commitment_aggregated_signature_validated {
-        println!("••• Issue with all_commitment_aggregated_signature_validated: {}", all_commitment_aggregated_signature);
+        println!(
+            "••• Issue with all_commitment_aggregated_signature_validated: {}",
+            all_commitment_aggregated_signature
+        );
         return false;
     }
     // The sig must validate against the commitmentHash and all public keys determined by the signers bitvector.
     // This is an aggregated BLS signature verification.
-    let quorum_signature_validated = verify_quorum_signature(commitment_hash, threshold_signature, public_key);
+    let quorum_signature_validated =
+        verify_quorum_signature(commitment_hash, threshold_signature, public_key);
     if !quorum_signature_validated {
         println!("••• Issue with quorum_signature_validated");
         return false;
@@ -1521,7 +1538,11 @@ pub unsafe extern "C" fn validate_llmq_callback_throuh_rust_bls(
     true
 }
 
-fn verify_secure_aggregated(message_digest: UInt256, signature: UInt768, public_keys: Vec<G1Element>) -> bool {
+fn verify_secure_aggregated(
+    message_digest: UInt256,
+    signature: UInt768,
+    public_keys: Vec<G1Element>,
+) -> bool {
     let scheme = bls_signatures::LegacySchemeMPL::new();
     let bls_signature = G2Element::from_bytes(signature.as_bytes()).unwrap();
     let keys = public_keys.iter().map(|k| k).collect::<Vec<&G1Element>>();
@@ -1529,7 +1550,11 @@ fn verify_secure_aggregated(message_digest: UInt256, signature: UInt768, public_
     is_verified
 }
 
-fn verify_quorum_signature(message_digest: UInt256, threshold_signature: UInt768, public_key: UInt384) -> bool {
+fn verify_quorum_signature(
+    message_digest: UInt256,
+    threshold_signature: UInt768,
+    public_key: UInt384,
+) -> bool {
     let scheme = bls_signatures::LegacySchemeMPL::new();
     let bls_public_key = G1Element::from_bytes_legacy(public_key.as_bytes()).unwrap();
     let bls_signature = G2Element::from_bytes_legacy(threshold_signature.as_bytes()).unwrap();

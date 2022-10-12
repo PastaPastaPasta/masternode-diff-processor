@@ -1,18 +1,18 @@
-use std::collections::BTreeMap;
-use std::num::ParseIntError;
-use byte::BytesExt;
 use byte::ctx::Bytes;
+use byte::BytesExt;
 use dash_spv_models::common::{LLMQSnapshotSkipMode, LLMQType, SocketAddress};
-use dash_spv_models::{llmq, masternode};
 use dash_spv_models::llmq::MNListDiff;
 use dash_spv_models::tx::CoinbaseTransaction;
+use dash_spv_models::{llmq, masternode};
 use dash_spv_primitives::consensus::encode::VarInt;
-use dash_spv_primitives::crypto::{UInt160, UInt256, UInt384, UInt768, VarBytes};
 use dash_spv_primitives::crypto::byte_util::{BytesDecodable, Reversable};
 use dash_spv_primitives::crypto::var_array::VarArray;
+use dash_spv_primitives::crypto::{UInt160, UInt256, UInt384, UInt768, VarBytes};
 use dash_spv_primitives::hashes::hex::FromHex;
 use dash_spv_primitives::util::base58;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::num::ParseIntError;
 
 #[derive(Serialize, Deserialize)]
 struct Masternode {
@@ -152,30 +152,33 @@ pub fn value_to_snapshot(value: &serde_json::Value) -> llmq::LLMQSnapshot {
     llmq::LLMQSnapshot::new(member_list, skip_list, skip_list_mode)
 }
 
-
-pub fn quorums_to_quorums(value: Vec<LLMQ>) -> BTreeMap<LLMQType, BTreeMap<UInt256, masternode::LLMQEntry>> {
+pub fn quorums_to_quorums(
+    value: Vec<LLMQ>,
+) -> BTreeMap<LLMQType, BTreeMap<UInt256, masternode::LLMQEntry>> {
     let mut quorums: BTreeMap<LLMQType, BTreeMap<UInt256, masternode::LLMQEntry>> = BTreeMap::new();
-    value.into_iter().filter(|llmq| LLMQType::from(llmq.llmq_type as u8) == LLMQType::Llmqtype60_75).for_each(|llmq| {
-        let entry = masternode::LLMQEntry::new(
-            llmq.version as u16,
-            LLMQType::from(llmq.llmq_type as u8),
-            block_hash_to_block_hash(llmq.quorum_hash),
-            Some(llmq.quorum_index as u16),
-            VarInt(llmq.signers_count as u64),
-            VarInt(llmq.valid_members_count as u64),
-            llmq.signers.as_bytes().to_vec(),
-            llmq.valid_members.as_bytes().to_vec(),
-            UInt384::from_hex(llmq.quorum_public_key.as_str()).unwrap(),
-            UInt256::from_hex(llmq.quorum_vvec_hash.as_str()).unwrap(),
-            UInt768::from_hex(llmq.quorum_sig.as_str()).unwrap(),
-            UInt768::from_hex(llmq.members_sig.as_str()).unwrap()
-        );
-        quorums
-            .entry(entry.llmq_type)
-            .or_insert(BTreeMap::new())
-            .insert(entry.llmq_hash, entry);
-
-    });
+    value
+        .into_iter()
+        .filter(|llmq| LLMQType::from(llmq.llmq_type as u8) == LLMQType::Llmqtype60_75)
+        .for_each(|llmq| {
+            let entry = masternode::LLMQEntry::new(
+                llmq.version as u16,
+                LLMQType::from(llmq.llmq_type as u8),
+                block_hash_to_block_hash(llmq.quorum_hash),
+                Some(llmq.quorum_index as u16),
+                VarInt(llmq.signers_count as u64),
+                VarInt(llmq.valid_members_count as u64),
+                llmq.signers.as_bytes().to_vec(),
+                llmq.valid_members.as_bytes().to_vec(),
+                UInt384::from_hex(llmq.quorum_public_key.as_str()).unwrap(),
+                UInt256::from_hex(llmq.quorum_vvec_hash.as_str()).unwrap(),
+                UInt768::from_hex(llmq.quorum_sig.as_str()).unwrap(),
+                UInt768::from_hex(llmq.members_sig.as_str()).unwrap(),
+            );
+            quorums
+                .entry(entry.llmq_type)
+                .or_insert(BTreeMap::new())
+                .insert(entry.llmq_hash, entry);
+        });
     quorums
 }
 
@@ -227,15 +230,26 @@ pub fn nodes_to_masternodes(value: Vec<Node>) -> BTreeMap<UInt256, masternode::M
     let map: BTreeMap<UInt256, masternode::MasternodeEntry> = value
         .into_iter()
         .filter_map(|node| {
-            let provider_registration_transaction_hash = UInt256::from_hex(node.pro_reg_tx_hash.as_str()).unwrap();
+            let provider_registration_transaction_hash =
+                UInt256::from_hex(node.pro_reg_tx_hash.as_str()).unwrap();
             let confirmed_hash = UInt256::from_hex(node.confirmed_hash.as_str()).unwrap();
             // node.service don't really need
-            let socket_address = SocketAddress { ip_address: Default::default(), port: 0 };
+            let socket_address = SocketAddress {
+                ip_address: Default::default(),
+                port: 0,
+            };
             let voting_bytes = base58::from(node.voting_address.as_str()).unwrap();
             let key_id_voting = UInt160::from_bytes(&voting_bytes, &mut 0).unwrap();
             let operator_public_key = UInt384::from_hex(node.pub_key_operator.as_str()).unwrap();
             let is_valid = node.is_valid;
-            let entry = masternode::MasternodeEntry::new(provider_registration_transaction_hash, confirmed_hash, socket_address, key_id_voting, operator_public_key, if is_valid { 1 } else { 0 });
+            let entry = masternode::MasternodeEntry::new(
+                provider_registration_transaction_hash,
+                confirmed_hash,
+                socket_address,
+                key_id_voting,
+                operator_public_key,
+                if is_valid { 1 } else { 0 },
+            );
             // assert_eq!(message.len(), MN_ENTRY_PAYLOAD_LENGTH);
             // entry.update_with_block_height(block_height);
             Some(entry)
@@ -256,7 +270,12 @@ pub fn parse_coinbase_tx_merkle_tree(bytes: &[u8]) -> (u32, VarArray<UInt256>, &
     let total_transactions = u32::from_bytes(bytes, offset).unwrap();
     let merkle_hashes = VarArray::<UInt256>::from_bytes(bytes, offset).unwrap();
     let merkle_flags_var_bytes = VarBytes::from_bytes(bytes, offset).unwrap();
-    (total_transactions, merkle_hashes, merkle_flags_var_bytes.1, merkle_flags_var_bytes.0.0 as usize)
+    (
+        total_transactions,
+        merkle_hashes,
+        merkle_flags_var_bytes.1,
+        merkle_flags_var_bytes.0 .0 as usize,
+    )
 }
 
 pub fn bools_to_bytes(bools: Vec<bool>) -> Vec<u8> {
@@ -295,9 +314,15 @@ fn vec_to_arr<T, const N: usize>(v: Vec<T>) -> [T; N] {
 }
 
 pub fn masternode_list_from_genesis_diff<BHL: Fn(UInt256) -> u32 + Copy>(
-    diff: ListDiff, block_height_lookup: BHL) -> MNListDiff {
-    let base_block_hash = UInt256::from_hex(diff.base_block_hash.as_str()).unwrap().reversed();
-    let block_hash = UInt256::from_hex(diff.block_hash.as_str()).unwrap().reversed();
+    diff: ListDiff,
+    block_height_lookup: BHL,
+) -> MNListDiff {
+    let base_block_hash = UInt256::from_hex(diff.base_block_hash.as_str())
+        .unwrap()
+        .reversed();
+    let block_hash = UInt256::from_hex(diff.block_hash.as_str())
+        .unwrap()
+        .reversed();
     let cb_tx_bytes = Vec::from_hex(diff.cb_tx.as_str()).unwrap();
     let coinbase_transaction = CoinbaseTransaction::from_bytes(&cb_tx_bytes, &mut 0).unwrap();
     // let tree_bytes = diff.cb_tx_merkle_tree.as_bytes();
@@ -309,9 +334,15 @@ pub fn masternode_list_from_genesis_diff<BHL: Fn(UInt256) -> u32 + Copy>(
     let merkle_hashes = VarArray::<UInt256>::from_bytes(tree_bytes, offset).unwrap();
     let merkle_flags_var_int: VarInt = VarInt::from_bytes(tree_bytes, offset).unwrap();
     let merkle_flags_count = merkle_flags_var_int.0 as usize;
-    let merkle_flags: &[u8] = tree_bytes.read_with(offset, Bytes::Len(merkle_flags_count)).unwrap();
+    let merkle_flags: &[u8] = tree_bytes
+        .read_with(offset, Bytes::Len(merkle_flags_count))
+        .unwrap();
 
-    let deleted_masternode_hashes = diff.deleted_mns.iter().map(|s| UInt256::from_hex(s.as_str()).unwrap()).collect();
+    let deleted_masternode_hashes = diff
+        .deleted_mns
+        .iter()
+        .map(|s| UInt256::from_hex(s.as_str()).unwrap())
+        .collect();
     let added_or_modified_masternodes = nodes_to_masternodes(diff.mn_list);
     // in that snapshot it's always empty
     let deleted_quorums = BTreeMap::default();
@@ -328,7 +359,7 @@ pub fn masternode_list_from_genesis_diff<BHL: Fn(UInt256) -> u32 + Copy>(
         added_or_modified_masternodes,
         deleted_quorums,
         added_quorums,
-        block_height: block_height_lookup(block_hash.clone())
+        block_height: block_height_lookup(block_hash.clone()),
     };
     mn_list_diff
 }
